@@ -156,6 +156,8 @@ class ForecastSummaryTool(BaseTool):  # type: ignore[misc]
     args_schema: Type[BaseModel] = ForecastSummaryToolSchema
 
     def _run(self, **kwargs: Any) -> str:
+        query = kwargs.get("query", "forecast summary")  # Extract the query parameter
+        
         try:
             response = requests.get(
                 "http://localhost:8080/api/v1/forecast/summary",
@@ -169,20 +171,28 @@ class ForecastSummaryTool(BaseTool):  # type: ignore[misc]
             
             data = response.json()
             
-            # Format the response for the agent
-            summary = f"""
-FORECAST SUMMARY ({data['period']['current']}):
-Total Current Forecast: ${data['summary_metrics']['total_forecast_current']:,}
-Overall Variance: ${data['summary_metrics']['overall_variance']:,}
-
-TOP ACCOUNTS WITH VARIANCES:
-"""
-            for account in data['top_accounts_with_variances'][:3]:
-                summary += f"- {account['account_name']}: ${account['current_forecast']:,} ({account['variance_percentage']:+.1f}%)\n"
+            # Format the response for our new NVIDIA data structure
+            forecast_metrics = data.get('forecast_metrics', {})
+            top_accounts = data.get('top_variance_accounts', [])
+            product_breakdown = data.get('product_breakdown', [])
             
-            summary += "\nTOP PRODUCTS CAUSING VARIANCES:\n"
-            for product in data['top_products_causing_variances'][:3]:
-                summary += f"- {product['product_name']}: ${product['total_variance']:,} variance ({product['trend']})\n"
+            summary = f"""
+NVIDIA FORECAST SUMMARY:
+Total BUF Revenue: ${forecast_metrics.get('total_buf_revenue', 0):,.2f}
+Total RSF Revenue: ${forecast_metrics.get('total_rsf_revenue', 0):,.2f}
+Overall Variance: ${forecast_metrics.get('total_variance', 0):,.2f} ({forecast_metrics.get('variance_percentage', 0):+.2f}%)
+Total Deals: {forecast_metrics.get('deal_count', 0):,}
+
+TOP ACCOUNTS WITH HIGHEST BUF vs RSF VARIANCES:
+"""
+            for i, account in enumerate(top_accounts[:5], 1):
+                variance_pct = account.get('variance_percentage', 0)
+                summary += f"{i}. {account.get('account', 'Unknown')}: ${account.get('total_rsf_revenue', 0):,.2f} (Variance: ${account.get('total_variance', 0):,.2f}, {variance_pct:+.1f}%)\n"
+
+            summary += "\nTOP PRODUCT FAMILIES BY REVENUE:\n"
+            for i, product in enumerate(product_breakdown[:5], 1):
+                variance_pct = product.get('variance_percentage', 0) 
+                summary += f"{i}. {product.get('product', 'Unknown')}: ${product.get('total_rsf_revenue', 0):,.2f} ({product.get('account_count', 0)} accounts, {variance_pct:+.1f}% variance)\n"
             
             return summary
             
@@ -222,21 +232,41 @@ class AccountVarianceTool(BaseTool):  # type: ignore[misc]
             
             data = response.json()
             
-            analysis = f"""
-VARIANCE ANALYSIS FOR {data['account_name']} ({period}):
+            # Handle our new API format - data is a list of accounts
+            if isinstance(data, list):
+                if not data:
+                    return f"No data found for account: {account_name}"
+                
+                # Check if first item is an error
+                first_item = data[0]
+                if "error" in first_item:
+                    available_accounts = first_item.get("available_accounts", [])[:5]
+                    return f"""
+ERROR: {first_item['error']}
 
-PRODUCT BREAKDOWN:
+AVAILABLE ACCOUNTS (sample):
+{chr(10).join(f"- {acc}" for acc in available_accounts)}
 """
-            for product in data['variance_breakdown']:
-                analysis += f"- {product['product']}: ${product['current_forecast']:,} vs ${product['previous_forecast']:,} (${product['variance']:,} variance)\n"
-                analysis += f"  Reason: {product['reason']}\n"
-            
-            analysis += "\nHISTORICAL TRENDS (Recent 6 months):\n"
-            for trend in data['historical_trends']:
-                actual = f"${trend['actual_value']:,}" if trend['actual_value'] else "TBD"
-                analysis += f"- {trend['month']}: Forecast ${trend['forecast_value']:,}, Actual {actual}\n"
-            
-            return analysis
+                
+                # Process account data
+                analysis = f"""
+NVIDIA ACCOUNT VARIANCE ANALYSIS:
+
+TOP ACCOUNTS BY BUF vs RSF VARIANCE:
+"""
+                for i, account in enumerate(data[:10], 1):
+                    variance_pct = account.get('variance_percentage', 0)
+                    analysis += f"{i}. {account.get('account', 'Unknown')}\n"
+                    analysis += f"   - BUF Revenue: ${account.get('total_buf_revenue', 0):,.2f}\n"
+                    analysis += f"   - RSF Revenue: ${account.get('total_rsf_revenue', 0):,.2f}\n"
+                    analysis += f"   - Variance: ${account.get('total_variance', 0):,.2f} ({variance_pct:+.1f}%)\n"
+                    analysis += f"   - Deal Count: {account.get('deal_count', 0)}\n"
+                    analysis += f"   - Avg Deal Size: ${account.get('avg_deal_size', 0):,.2f}\n\n"
+                
+                return analysis
+            else:
+                # Legacy format (shouldn't happen with our new API)
+                return f"Unexpected data format received for account: {account_name}"
             
         except Exception as e:
             return f"Error retrieving account variance for {account_name}: {str(e)}"

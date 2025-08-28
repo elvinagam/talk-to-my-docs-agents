@@ -31,7 +31,9 @@ from tool import (
     ProductImpactTool
 )
 
-DEFAULT_MODEL = "datarobot/azure/gpt-4o-mini"
+# For DataRobot deployments, use DataRobot LLM Gateway format
+# When use_deployment=True, the deployment endpoint determines which actual model is used
+DEFAULT_MODEL = "datarobot/azure/gpt-4o-2024-11-20"
 
 
 class MyAgent:
@@ -173,8 +175,8 @@ class MyAgent:
             verbose=self.verbose,
             max_iter=3,
             llm=self.model_factory(
-                model=self.get_deployment_model(),
-                use_deployment=True,
+                model="datarobot/azure/gpt-4o-2024-11-20",
+                use_deployment=False,
             ),
         )
 
@@ -209,8 +211,8 @@ class MyAgent:
             max_iter=5,
             verbose=self.verbose,
             llm=self.model_factory(
-                model=self.get_deployment_model(),
-                use_deployment=True,
+                model="datarobot/azure/gpt-4o-2024-11-20",
+                use_deployment=False,
             ),
         )
 
@@ -249,9 +251,9 @@ class MyAgent:
             max_iter=5,
             verbose=self.verbose,
             llm=self.model_factory(
-                model=self.get_deployment_model(),
-                # model="datarobot/azure/gpt-4o-2024-11-20",
-                use_deployment=True,
+                # model=self.get_deployment_model(),
+                model="datarobot/azure/gpt-4o-2024-11-20",
+                use_deployment=False,
             ),
         )
 
@@ -283,8 +285,8 @@ class MyAgent:
             verbose=self.verbose,
             max_iter=5,
             llm=self.model_factory(
-                model=self.get_deployment_model(),
-                use_deployment=True,
+                model="datarobot/azure/gpt-4o-2024-11-20",
+                use_deployment=False,
             ),
         )
 
@@ -327,8 +329,8 @@ class MyAgent:
             max_iter=5,
             verbose=self.verbose,
             llm=self.model_factory(
-                model=self.get_deployment_model(),
-                use_deployment=True,
+                model="datarobot/azure/gpt-4o-2024-11-20",
+                use_deployment=False,
             ),
         )
 
@@ -380,8 +382,8 @@ class MyAgent:
             allow_delegation=False,
             verbose=self.verbose,
             llm=self.model_factory(
-                model=self.get_deployment_model(),
-                use_deployment=True,
+                model="datarobot/azure/gpt-4o-2024-11-20",
+                use_deployment=False,
             ),
         )
 
