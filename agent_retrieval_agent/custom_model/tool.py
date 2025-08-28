@@ -301,25 +301,39 @@ class ProductImpactTool(BaseTool):  # type: ignore[misc]
             
             data = response.json()
             
-            analysis = f"""
-PRODUCT IMPACT ANALYSIS FOR {data['product_name']}:
-Total Forecast Impact: ${data['total_forecast_impact']:,}
+            # Handle the new NVIDIA API response format (list of products)
+            if isinstance(data, list) and len(data) > 0:
+                # Check if we have an error response
+                if 'error' in data[0]:
+                    available_products = data[0].get('available_products', [])
+                    return f"Error: {data[0]['error']}\nAvailable products: {', '.join(available_products[:5])}"
+                
+                # Process the product data
+                total_products = len(data)
+                total_buf_revenue = sum(product.get('total_buf_revenue', 0) for product in data)
+                total_rsf_revenue = sum(product.get('total_rsf_revenue', 0) for product in data)
+                total_variance = sum(product.get('total_variance', 0) for product in data)
+                total_accounts = sum(product.get('account_count', 0) for product in data)
+                
+                analysis = f"""
+NVIDIA PRODUCT IMPACT ANALYSIS FOR "{product_name}":
+Found {total_products} matching product(s)
+Total BUF Revenue: ${total_buf_revenue:,.2f}
+Total RSF Revenue: ${total_rsf_revenue:,.2f}
+Total Variance: ${total_variance:,.2f} ({(total_variance/total_rsf_revenue*100) if total_rsf_revenue != 0 else 0:+.1f}%)
+Total Accounts Affected: {total_accounts}
 
-ACCOUNTS AFFECTED:
+TOP PRODUCT BREAKDOWN:
 """
-            for account in data['accounts_affected']:
-                analysis += f"- {account['account_name']}: ${account['forecast_contribution']:,} contribution, "
-                analysis += f"${account['variance_from_plan']:,} variance ({account['confidence_level']} confidence)\n"
-            
-            analysis += f"\nMARKET FACTORS:\n"
-            for factor in data['market_factors']:
-                analysis += f"- {factor}\n"
-            
-            analysis += f"\nRISK FACTORS:\n"
-            for risk in data['risk_factors']:
-                analysis += f"- {risk}\n"
-            
-            return analysis
+                for i, product in enumerate(data[:5], 1):  # Show top 5 products
+                    variance_pct = product.get('variance_percentage', 0)
+                    analysis += f"{i}. {product.get('product', 'Unknown')}: ${product.get('total_rsf_revenue', 0):,.2f} "
+                    analysis += f"({product.get('account_count', 0)} accounts, {variance_pct:+.1f}% variance)\n"
+                
+                return analysis
+                
+            else:
+                return f"No product data found for '{product_name}'. Please check the product name."
             
         except Exception as e:
             return f"Error retrieving product impact for {product_name}: {str(e)}"
